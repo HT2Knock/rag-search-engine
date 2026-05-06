@@ -1,7 +1,7 @@
 import os
 import pickle
 import string
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from nltk.stem.porter import PorterStemmer
@@ -15,16 +15,30 @@ class InvertedIndex:
     def __init__(self):
         self.index = defaultdict(set)
         self.docmap: dict[int, dict] = {}
+        self.term_frequencies: dict[int, Counter] = defaultdict(Counter)
         self.index_path = os.path.join(CACHE_DIR, "index.pkl")
         self.docmap_path = os.path.join(CACHE_DIR, "docmap.pkl")
+        self.term_frequencies_path = os.path.join(CACHE_DIR, "term_frequencies.pkl")
 
     def __add_document(self, doc_id: int, text: str):
         tokens = tokenize_text(text)
         for token in tokens:
             self.index[token].add(doc_id)
+            self.term_frequencies[doc_id][token] += 1
 
     def get_document_ids(self, term: str) -> list[int]:
-        return sorted(self.index[term.lower()])
+        tokens = tokenize_text(term)
+        if len(tokens) > 1:
+            raise ValueError("Term length greater than 1")
+
+        return sorted(self.index[tokens[0]])
+
+    def get_tf(self, doc_id: int, term: str) -> int:
+        tokens = tokenize_text(term)
+        if len(tokens) > 1:
+            raise ValueError("Term length greater than 1")
+
+        return self.term_frequencies[doc_id][tokens[0]]
 
     def build(self):
         movies = load_movies()
@@ -42,6 +56,9 @@ class InvertedIndex:
         with open(self.docmap_path, "wb") as f:
             pickle.dump(self.docmap, f)
 
+        with open(self.term_frequencies_path, "wb") as f:
+            pickle.dump(self.term_frequencies, f)
+
     def load(self):
         if not Path(self.index_path).exists():
             raise FileNotFoundError(f"Missing required file: {self.index_path}")
@@ -54,6 +71,15 @@ class InvertedIndex:
 
         with open(self.docmap_path, "rb") as f:
             self.docmap = pickle.load(f)
+
+        with open(self.term_frequencies_path, "rb") as f:
+            self.term_frequencies = pickle.load(f)
+
+
+def tf_command(doc_id: int, term: str):
+    index = InvertedIndex()
+    index.load()
+    return index.get_tf(doc_id, term)
 
 
 def build_command() -> None:
