@@ -1,34 +1,85 @@
+import os
+import pickle
 import string
+from collections import defaultdict
+from pathlib import Path
 
 from nltk.stem.porter import PorterStemmer
 
-from .utils import DEFAULT_SEARCH_LIMIT, load_movies, load_stopwords
+from .utils import CACHE_DIR, DEFAULT_SEARCH_LIMIT, load_movies, load_stopwords
 
 _stop_words = load_stopwords()
 
 
+class InvertedIndex:
+    def __init__(self):
+        self.index = defaultdict(set)
+        self.docmap: dict[int, dict] = {}
+        self.index_path = os.path.join(CACHE_DIR, "index.pkl")
+        self.docmap_path = os.path.join(CACHE_DIR, "docmap.pkl")
+
+    def __add_document(self, doc_id: int, text: str):
+        tokens = tokenize_text(text)
+        for token in tokens:
+            self.index[token].add(doc_id)
+
+    def get_document_ids(self, term: str) -> list[int]:
+        return sorted(self.index[term.lower()])
+
+    def build(self):
+        movies = load_movies()
+        for movie in movies:
+            doc_id = movie["id"]
+            self.__add_document(doc_id, f"{movie['title']} {movie['description']}")
+            self.docmap[doc_id] = movie
+
+    def save(self):
+        os.makedirs(CACHE_DIR, exist_ok=True)
+
+        with open(self.index_path, "wb") as f:
+            pickle.dump(self.index, f)
+
+        with open(self.docmap_path, "wb") as f:
+            pickle.dump(self.docmap, f)
+
+    def load(self):
+        if not Path(self.index_path).exists():
+            raise FileNotFoundError(f"Missing required file: {self.index_path}")
+
+        if not Path(self.docmap_path).exists():
+            raise FileNotFoundError(f"Missing required file: {self.docmap_path}")
+
+        with open(self.index_path, "rb") as f:
+            self.index = pickle.load(f)
+
+        with open(self.docmap_path, "rb") as f:
+            self.docmap = pickle.load(f)
+
+
+def build_command() -> None:
+    idx = InvertedIndex()
+    idx.build()
+    idx.save()
+
+
 def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
-    movies = load_movies()
+    index = InvertedIndex()
+    index.load()
     results = []
 
     stemmer = PorterStemmer()
     query_tokens = tokenize_text(query, stemmer)
 
-    for movie in movies:
-        if has_matching_token(query_tokens, tokenize_text(movie["title"], stemmer)):
-            results.append(movie)
-            if len(results) >= limit:
-                break
+    doc_ids = set()
+    for token in query_tokens:
+        doc_ids.update(index.get_document_ids(token))
+
+    for id in doc_ids:
+        results.append(index.docmap[id])
+        if len(results) >= limit:
+            break
 
     return results
-
-
-def has_matching_token(query_tokens: list[str], title_tokens: list[str]) -> bool:
-    for query_token in query_tokens:
-        for title_token in title_tokens:
-            if query_token == title_token:
-                return True
-    return False
 
 
 def tokenize_text(text: str, stemmer: PorterStemmer | None = None) -> list[str]:
