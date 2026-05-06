@@ -12,10 +12,10 @@ def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
     results = []
 
     stemmer = PorterStemmer()
-    query_tokens = tokenize_text(stemmer, query)
+    query_tokens = tokenize_text(query, stemmer)
 
     for movie in movies:
-        if has_matching_token(query_tokens, tokenize_text(stemmer, movie["title"])):
+        if has_matching_token(query_tokens, tokenize_text(movie["title"], stemmer)):
             results.append(movie)
             if len(results) >= limit:
                 break
@@ -31,7 +31,10 @@ def has_matching_token(query_tokens: list[str], title_tokens: list[str]) -> bool
     return False
 
 
-def tokenize_text(stemmer: PorterStemmer, text: str) -> list[str]:
+def tokenize_text(text: str, stemmer: PorterStemmer | None = None) -> list[str]:
+    if not stemmer:
+        stemmer = PorterStemmer()
+
     text = preprocess_text(text)
     tokens = text.split()
     valid_tokens = []

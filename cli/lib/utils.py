@@ -1,9 +1,14 @@
 import json
 import os
+from pathlib import Path
 from typing import Any
 
-DATA_PATH = os.path.join(os.getcwd(), "data", "movies.json")
-STOP_WORDS_PATH = os.path.join(os.getcwd(), "data", "stopwords.txt")
+PROJECT_ROOT = Path(__file__).parent.parent
+DATA_PATH = os.path.join(PROJECT_ROOT, "data", "movies.json")
+STOP_WORDS_PATH = os.path.join(PROJECT_ROOT, "data", "stopwords.txt")
+
+CACHE_DIR = os.path.join(PROJECT_ROOT, "cache")
+
 DEFAULT_SEARCH_LIMIT = 5
 
 
