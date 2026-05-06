@@ -1,3 +1,4 @@
+import math
 import os
 import pickle
 import string
@@ -40,6 +41,14 @@ class InvertedIndex:
 
         return self.term_frequencies[doc_id][tokens[0]]
 
+    def get_idf(self, term: str) -> float:
+        total_doc_count = len(self.docmap)
+        term_match_doc_count = len(self.get_document_ids(term))
+        return math.log((total_doc_count + 1) / (term_match_doc_count + 1))
+
+    def get_tf_idf(self, doc_id: int, term: str) -> float:
+        return self.get_tf(doc_id, term) * self.get_idf(term)
+
     def build(self):
         movies = load_movies()
         for movie in movies:
@@ -76,12 +85,6 @@ class InvertedIndex:
             self.term_frequencies = pickle.load(f)
 
 
-def tf_command(doc_id: int, term: str):
-    index = InvertedIndex()
-    index.load()
-    return index.get_tf(doc_id, term)
-
-
 def build_command() -> None:
     idx = InvertedIndex()
     idx.build()
@@ -89,8 +92,8 @@ def build_command() -> None:
 
 
 def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
-    index = InvertedIndex()
-    index.load()
+    idx = InvertedIndex()
+    idx.load()
     results = []
 
     stemmer = PorterStemmer()
@@ -98,10 +101,10 @@ def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
 
     doc_ids = set()
     for token in query_tokens:
-        doc_ids.update(index.get_document_ids(token))
+        doc_ids.update(idx.get_document_ids(token))
 
     for id in doc_ids:
-        results.append(index.docmap[id])
+        results.append(idx.docmap[id])
         if len(results) >= limit:
             break
 

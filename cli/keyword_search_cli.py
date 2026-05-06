@@ -1,6 +1,6 @@
 import argparse
 
-from lib.search import InvertedIndex, build_command, search_command, tf_command
+from lib.search import InvertedIndex, build_command, search_command
 
 
 def main() -> None:
@@ -18,6 +18,17 @@ def main() -> None:
     tf_parser.add_argument("doc_id", type=int, help="Movie doc id")
     tf_parser.add_argument("term", type=str, help="Query term")
 
+    idf_parser = subparsers.add_parser(
+        "idf", help="Get inverse document frequencies from a movie doc"
+    )
+    idf_parser.add_argument("term", type=str, help="Query term")
+
+    tfidf_parser = subparsers.add_parser(
+        "tfidf", help="Get tf-idf score from a movie doc"
+    )
+    tfidf_parser.add_argument("doc_id", type=int, help="Movie doc id")
+    tfidf_parser.add_argument("term", type=str, help="Query term")
+
     args = parser.parse_args()
 
     match args.command:
@@ -28,13 +39,29 @@ def main() -> None:
                 print(f"{i}. {res['title']}")
 
         case "build":
-            print("Start buidling inverted index")
+            print("Start building inverted index")
             build_command()
-            print("Finish buidling inverted index")
+            print("Finish building inverted index")
 
         case "tf":
+            idx = InvertedIndex()
+            idx.load()
             print(f"Searching for {args.term} in {args.doc_id}:")
-            print(tf_command(args.doc_id, args.term))
+            print(idx.get_tf(args.doc_id, args.term))
+
+        case "idf":
+            idx = InvertedIndex()
+            idx.load()
+            idf = idx.get_idf(args.term)
+            print(f"Inverse document frequency of '{args.term}': {idf:.2f}")
+
+        case "tfidf":
+            idx = InvertedIndex()
+            idx.load()
+            tf_idf = idx.get_tf_idf(args.doc_id, args.term)
+            print(
+                f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf:.2f}"
+            )
 
         case _:
             parser.print_help()
