@@ -10,24 +10,24 @@ def main() -> None:
     search_parser = subparsers.add_parser("search", help="Search movie using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
 
-    subparsers.add_parser("build", help="Build movies inverted index")
+    subparsers.add_parser("build", help="Build inverted index from movie data")
 
     tf_parser = subparsers.add_parser(
-        "tf", help="Get term frequencies from a movie doc"
+        "tf", help="Show how many times a term appears in a specific document"
     )
-    tf_parser.add_argument("doc_id", type=int, help="Movie doc id")
-    tf_parser.add_argument("term", type=str, help="Query term")
+    tf_parser.add_argument("doc_id", type=int, help="Document ID")
+    tf_parser.add_argument("term", type=str, help="Term to look up")
 
     idf_parser = subparsers.add_parser(
-        "idf", help="Get inverse document frequencies from a movie doc"
+        "idf", help="Show how rare or common a term is across all documents"
     )
-    idf_parser.add_argument("term", type=str, help="Query term")
+    idf_parser.add_argument("term", type=str, help="Term to look up")
 
     tfidf_parser = subparsers.add_parser(
-        "tfidf", help="Get tf-idf score from a movie doc"
+        "tfidf", help="Compute TF-IDF relevance score for a term in a document"
     )
-    tfidf_parser.add_argument("doc_id", type=int, help="Movie doc id")
-    tfidf_parser.add_argument("term", type=str, help="Query term")
+    tfidf_parser.add_argument("doc_id", type=int, help="Document ID")
+    tfidf_parser.add_argument("term", type=str, help="Term to score")
 
     args = parser.parse_args()
 
