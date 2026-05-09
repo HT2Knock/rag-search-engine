@@ -3,6 +3,8 @@ import os
 import pickle
 import string
 from collections import Counter, defaultdict
+from itertools import islice
+from operator import itemgetter
 from pathlib import Path
 
 from nltk.stem.porter import PorterStemmer
@@ -97,6 +99,29 @@ class InvertedIndex:
         )
         tf = self.get_tf(doc_id, term)
         return (tf * (k1 + 1)) / (tf + k1 * length_norm)
+
+    def bm25(self, doc_id: int, term: str) -> float:
+        tf = self.get_bm25_tf(doc_id, term)
+        idf = self.get_bm25_idf(term)
+
+        return tf * idf
+
+    def bm25_search(self, query, limit) -> list[dict]:
+        tokens = tokenize_text(query)
+        scores = defaultdict(int)
+
+        for doc_id in self.docmap:
+            for token in tokens:
+                scores[doc_id] += self.bm25(doc_id, token)
+        sorted_scores = dict(sorted(scores.items(), key=itemgetter(1), reverse=True))
+        return [
+            {
+                "score": sorted_scores[doc_id],
+                "doc_id": doc_id,
+                "title": self.docmap[doc_id]["title"],
+            }
+            for doc_id in islice(sorted_scores, limit)
+        ]
 
     def build(self):
         movies = load_movies()
