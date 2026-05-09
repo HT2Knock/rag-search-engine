@@ -7,7 +7,14 @@ from pathlib import Path
 
 from nltk.stem.porter import PorterStemmer
 
-from .utils import BM25_K1, CACHE_DIR, DEFAULT_SEARCH_LIMIT, load_movies, load_stopwords
+from .utils import (
+    BM25_B,
+    BM25_K1,
+    CACHE_DIR,
+    DEFAULT_SEARCH_LIMIT,
+    load_movies,
+    load_stopwords,
+)
 
 _stop_words = load_stopwords()
 
@@ -17,15 +24,27 @@ class InvertedIndex:
         self.index = defaultdict(set)
         self.docmap: dict[int, dict] = {}
         self.term_frequencies: dict[int, Counter] = defaultdict(Counter)
+        self.doc_lengths: dict[int, int] = {}
         self.index_path = os.path.join(CACHE_DIR, "index.pkl")
         self.docmap_path = os.path.join(CACHE_DIR, "docmap.pkl")
         self.term_frequencies_path = os.path.join(CACHE_DIR, "term_frequencies.pkl")
+        self.doc_lengths_path = os.path.join(CACHE_DIR, "doc_lengths.pkl")
 
     def __add_document(self, doc_id: int, text: str):
         tokens = tokenize_text(text)
+        count = 0
         for token in tokens:
             self.index[token].add(doc_id)
             self.term_frequencies[doc_id][token] += 1
+            count += 1
+
+        self.doc_lengths[doc_id] = count
+
+    def __get_avg_doc_length(self) -> float:
+        if len(self.doc_lengths) == 0:
+            return 0.0
+
+        return sum(self.doc_lengths.values()) / len(self.doc_lengths)
 
     def get_document_ids(self, term: str) -> list[int]:
         tokens = tokenize_text(term)
@@ -70,9 +89,14 @@ class InvertedIndex:
             + 1
         )
 
-    def get_bm25_tf(self, doc_id: int, term: str, k1: float = BM25_K1) -> float:
+    def get_bm25_tf(
+        self, doc_id: int, term: str, k1: float = BM25_K1, b: float = BM25_B
+    ) -> float:
+        length_norm = (
+            1 - b + b * (self.doc_lengths[doc_id] / self.__get_avg_doc_length())
+        )
         tf = self.get_tf(doc_id, term)
-        return (tf * (k1 + 1)) / (tf + k1)
+        return (tf * (k1 + 1)) / (tf + k1 * length_norm)
 
     def build(self):
         movies = load_movies()
@@ -93,6 +117,9 @@ class InvertedIndex:
         with open(self.term_frequencies_path, "wb") as f:
             pickle.dump(self.term_frequencies, f)
 
+        with open(self.doc_lengths_path, "wb") as f:
+            pickle.dump(self.doc_lengths, f)
+
     def load(self):
         if not Path(self.index_path).exists():
             raise FileNotFoundError(f"Missing required file: {self.index_path}")
@@ -108,6 +135,9 @@ class InvertedIndex:
 
         with open(self.term_frequencies_path, "rb") as f:
             self.term_frequencies = pickle.load(f)
+
+        with open(self.doc_lengths_path, "rb") as f:
+            self.doc_lengths = pickle.load(f)
 
 
 def build_command() -> None:
