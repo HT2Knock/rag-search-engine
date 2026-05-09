@@ -7,7 +7,7 @@ from pathlib import Path
 
 from nltk.stem.porter import PorterStemmer
 
-from .utils import CACHE_DIR, DEFAULT_SEARCH_LIMIT, load_movies, load_stopwords
+from .utils import BM25_K1, CACHE_DIR, DEFAULT_SEARCH_LIMIT, load_movies, load_stopwords
 
 _stop_words = load_stopwords()
 
@@ -69,6 +69,10 @@ class InvertedIndex:
             / (term_match_doc_count + 0.5)
             + 1
         )
+
+    def get_bm25_tf(self, doc_id: int, term: str, k1: float = BM25_K1) -> float:
+        tf = self.get_tf(doc_id, term)
+        return (tf * (k1 + 1)) / (tf + k1)
 
     def build(self):
         movies = load_movies()

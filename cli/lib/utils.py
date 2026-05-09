@@ -10,6 +10,7 @@ STOP_WORDS_PATH = os.path.join(PROJECT_ROOT, "data", "stopwords.txt")
 CACHE_DIR = os.path.join(PROJECT_ROOT, "cache")
 
 DEFAULT_SEARCH_LIMIT = 5
+BM25_K1 = 1.5
 
 
 def load_movies() -> list[dict[str, Any]]:
