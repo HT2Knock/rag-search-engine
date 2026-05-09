@@ -42,12 +42,33 @@ class InvertedIndex:
         return self.term_frequencies[doc_id][tokens[0]]
 
     def get_idf(self, term: str) -> float:
+        tokens = tokenize_text(term)
+        if len(tokens) > 1:
+            raise ValueError("Term length greater than 1")
+
         total_doc_count = len(self.docmap)
         term_match_doc_count = len(self.get_document_ids(term))
         return math.log((total_doc_count + 1) / (term_match_doc_count + 1))
 
     def get_tf_idf(self, doc_id: int, term: str) -> float:
+        tokens = tokenize_text(term)
+        if len(tokens) > 1:
+            raise ValueError("Term length greater than 1")
+
         return self.get_tf(doc_id, term) * self.get_idf(term)
+
+    def get_bm25_idf(self, term: str) -> float:
+        tokens = tokenize_text(term)
+        if len(tokens) > 1:
+            raise ValueError("Term length greater than 1")
+
+        total_doc_count = len(self.docmap)
+        term_match_doc_count = len(self.get_document_ids(term))
+        return math.log(
+            (total_doc_count - term_match_doc_count + 0.5)
+            / (term_match_doc_count + 0.5)
+            + 1
+        )
 
     def build(self):
         movies = load_movies()
