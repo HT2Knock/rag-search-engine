@@ -1,6 +1,11 @@
 import argparse
 
-from lib.search import InvertedIndex, build_command, search_command, tokenize_text
+from lib.keyword_search import (
+    InvertedIndex,
+    build_command,
+    search_command,
+    tokenize_text,
+)
 from lib.utils import BM25_B, BM25_K1
 
 

@@ -4,4 +4,7 @@ version = "0.1.0"
 description = "movies rag search engine"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = ["nltk>=3.9.4"]
+dependencies = [
+    "nltk>=3.9.4",
+    "sentence-transformers>=5.4.1",
+]
