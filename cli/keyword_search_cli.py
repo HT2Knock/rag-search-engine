@@ -1,7 +1,17 @@
 import argparse
 
-from lib.search import InvertedIndex, build_command, search_command
+from lib.search import InvertedIndex, build_command, search_command, tokenize_text
 from lib.utils import BM25_B, BM25_K1
+
+
+def _get_term_token(term: str) -> str | None:
+    tokens = tokenize_text(term)
+    if not tokens:
+        print("Error: term contains no valid content (only stop words)")
+        return None
+    if len(tokens) > 1:
+        print(f"Warning: using first token '{tokens[0]}' from '{term}'")
+    return tokens[0]
 
 
 def main() -> None:
@@ -71,19 +81,28 @@ def main() -> None:
         case "tf":
             idx = InvertedIndex()
             idx.load()
+            token = _get_term_token(args.term)
+            if token is None:
+                return
             print(f"Searching for {args.term} in {args.doc_id}:")
-            print(idx.get_tf(args.doc_id, args.term))
+            print(idx.get_tf(args.doc_id, token))
 
         case "idf":
             idx = InvertedIndex()
             idx.load()
-            idf = idx.get_idf(args.term)
+            token = _get_term_token(args.term)
+            if token is None:
+                return
+            idf = idx.get_idf(token)
             print(f"Inverse document frequency of '{args.term}': {idf:.2f}")
 
         case "tfidf":
             idx = InvertedIndex()
             idx.load()
-            tf_idf = idx.get_tf_idf(args.doc_id, args.term)
+            token = _get_term_token(args.term)
+            if token is None:
+                return
+            tf_idf = idx.get_tf_idf(args.doc_id, token)
             print(
                 f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf:.2f}"
             )
@@ -91,14 +110,20 @@ def main() -> None:
         case "bm25idf":
             idx = InvertedIndex()
             idx.load()
-            bm25idf = idx.get_bm25_idf(args.term)
+            token = _get_term_token(args.term)
+            if token is None:
+                return
+            bm25idf = idx.get_bm25_idf(token)
             print(f"BM25 IDF score of '{args.term}': {bm25idf:.2f}")
 
         case "bm25tf":
             idx = InvertedIndex()
             idx.load()
+            token = _get_term_token(args.term)
+            if token is None:
+                return
             print(f"Searching for {args.term} in {args.doc_id}:")
-            bm25tf = idx.get_bm25_tf(args.doc_id, args.term)
+            bm25tf = idx.get_bm25_tf(args.doc_id, token)
             print(
                 f"BM25 TF score of '{args.term}' in document '{args.doc_id}': {bm25tf:.2f}"
             )

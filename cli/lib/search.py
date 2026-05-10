@@ -1,9 +1,7 @@
 import math
-import os
 import pickle
 import string
 from collections import Counter, defaultdict
-from itertools import islice
 from operator import itemgetter
 from pathlib import Path
 
@@ -19,6 +17,7 @@ from .utils import (
 )
 
 _stop_words = load_stopwords()
+_stemmer = PorterStemmer()
 
 
 class InvertedIndex:
@@ -27,12 +26,13 @@ class InvertedIndex:
         self.docmap: dict[int, dict] = {}
         self.term_frequencies: dict[int, Counter] = defaultdict(Counter)
         self.doc_lengths: dict[int, int] = {}
-        self.index_path = os.path.join(CACHE_DIR, "index.pkl")
-        self.docmap_path = os.path.join(CACHE_DIR, "docmap.pkl")
-        self.term_frequencies_path = os.path.join(CACHE_DIR, "term_frequencies.pkl")
-        self.doc_lengths_path = os.path.join(CACHE_DIR, "doc_lengths.pkl")
+        self.avg_doc_length: float = 0.0
+        self.index_path = Path(CACHE_DIR) / "index.pkl"
+        self.docmap_path = Path(CACHE_DIR) / "docmap.pkl"
+        self.term_frequencies_path = Path(CACHE_DIR) / "term_frequencies.pkl"
+        self.doc_lengths_path = Path(CACHE_DIR) / "doc_lengths.pkl"
 
-    def __add_document(self, doc_id: int, text: str):
+    def _add_document(self, doc_id: int, text: str):
         tokens = tokenize_text(text)
         count = 0
         for token in tokens:
@@ -42,49 +42,26 @@ class InvertedIndex:
 
         self.doc_lengths[doc_id] = count
 
-    def __get_avg_doc_length(self) -> float:
-        if len(self.doc_lengths) == 0:
-            return 0.0
+    def _get_avg_doc_length(self) -> float:
+        return self.avg_doc_length
 
-        return sum(self.doc_lengths.values()) / len(self.doc_lengths)
+    def get_document_ids(self, token: str) -> list[int]:
+        return sorted(self.index[token])
 
-    def get_document_ids(self, term: str) -> list[int]:
-        tokens = tokenize_text(term)
-        if len(tokens) > 1:
-            raise ValueError("Term length greater than 1")
+    def get_tf(self, doc_id: int, token: str) -> int:
+        return self.term_frequencies[doc_id][token]
 
-        return sorted(self.index[tokens[0]])
-
-    def get_tf(self, doc_id: int, term: str) -> int:
-        tokens = tokenize_text(term)
-        if len(tokens) > 1:
-            raise ValueError("Term length greater than 1")
-
-        return self.term_frequencies[doc_id][tokens[0]]
-
-    def get_idf(self, term: str) -> float:
-        tokens = tokenize_text(term)
-        if len(tokens) > 1:
-            raise ValueError("Term length greater than 1")
-
+    def get_idf(self, token: str) -> float:
         total_doc_count = len(self.docmap)
-        term_match_doc_count = len(self.get_document_ids(term))
+        term_match_doc_count = len(self.index[token])
         return math.log((total_doc_count + 1) / (term_match_doc_count + 1))
 
-    def get_tf_idf(self, doc_id: int, term: str) -> float:
-        tokens = tokenize_text(term)
-        if len(tokens) > 1:
-            raise ValueError("Term length greater than 1")
+    def get_tf_idf(self, doc_id: int, token: str) -> float:
+        return self.get_tf(doc_id, token) * self.get_idf(token)
 
-        return self.get_tf(doc_id, term) * self.get_idf(term)
-
-    def get_bm25_idf(self, term: str) -> float:
-        tokens = tokenize_text(term)
-        if len(tokens) > 1:
-            raise ValueError("Term length greater than 1")
-
+    def get_bm25_idf(self, token: str) -> float:
         total_doc_count = len(self.docmap)
-        term_match_doc_count = len(self.get_document_ids(term))
+        term_match_doc_count = len(self.index[token])
         return math.log(
             (total_doc_count - term_match_doc_count + 0.5)
             / (term_match_doc_count + 0.5)
@@ -92,46 +69,57 @@ class InvertedIndex:
         )
 
     def get_bm25_tf(
-        self, doc_id: int, term: str, k1: float = BM25_K1, b: float = BM25_B
+        self, doc_id: int, token: str, k1: float = BM25_K1, b: float = BM25_B
     ) -> float:
         length_norm = (
-            1 - b + b * (self.doc_lengths[doc_id] / self.__get_avg_doc_length())
+            1 - b + b * (self.doc_lengths[doc_id] / self._get_avg_doc_length())
         )
-        tf = self.get_tf(doc_id, term)
+        tf = self.get_tf(doc_id, token)
         return (tf * (k1 + 1)) / (tf + k1 * length_norm)
 
-    def bm25(self, doc_id: int, term: str) -> float:
-        tf = self.get_bm25_tf(doc_id, term)
-        idf = self.get_bm25_idf(term)
+    def bm25(self, doc_id: int, token: str) -> float:
+        return self.get_bm25_tf(doc_id, token) * self.get_bm25_idf(token)
 
-        return tf * idf
-
-    def bm25_search(self, query, limit) -> list[dict]:
+    def bm25_search(self, query: str, limit: int) -> list[dict]:
         tokens = tokenize_text(query)
-        scores = defaultdict(int)
+        if not tokens:
+            return []
 
-        for doc_id in self.docmap:
+        candidate_docs = set()
+        for token in tokens:
+            candidate_docs.update(self.index[token])
+
+        scores = defaultdict(float)
+        for doc_id in candidate_docs:
             for token in tokens:
                 scores[doc_id] += self.bm25(doc_id, token)
-        sorted_scores = dict(sorted(scores.items(), key=itemgetter(1), reverse=True))
+
+        sorted_results = sorted(
+            scores.items(), key=itemgetter(1), reverse=True
+        )
         return [
             {
-                "score": sorted_scores[doc_id],
+                "score": score,
                 "doc_id": doc_id,
                 "title": self.docmap[doc_id]["title"],
             }
-            for doc_id in islice(sorted_scores, limit)
+            for doc_id, score in sorted_results[:limit]
         ]
 
     def build(self):
         movies = load_movies()
         for movie in movies:
             doc_id = movie["id"]
-            self.__add_document(doc_id, f"{movie['title']} {movie['description']}")
+            self._add_document(doc_id, f"{movie['title']} {movie['description']}")
             self.docmap[doc_id] = movie
 
+        if self.doc_lengths:
+            self.avg_doc_length = (
+                sum(self.doc_lengths.values()) / len(self.doc_lengths)
+            )
+
     def save(self):
-        os.makedirs(CACHE_DIR, exist_ok=True)
+        Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
 
         with open(self.index_path, "wb") as f:
             pickle.dump(self.index, f)
@@ -146,10 +134,10 @@ class InvertedIndex:
             pickle.dump(self.doc_lengths, f)
 
     def load(self):
-        if not Path(self.index_path).exists():
+        if not self.index_path.exists():
             raise FileNotFoundError(f"Missing required file: {self.index_path}")
 
-        if not Path(self.docmap_path).exists():
+        if not self.docmap_path.exists():
             raise FileNotFoundError(f"Missing required file: {self.docmap_path}")
 
         with open(self.index_path, "rb") as f:
@@ -164,6 +152,11 @@ class InvertedIndex:
         with open(self.doc_lengths_path, "rb") as f:
             self.doc_lengths = pickle.load(f)
 
+        if self.doc_lengths:
+            self.avg_doc_length = (
+                sum(self.doc_lengths.values()) / len(self.doc_lengths)
+            )
+
 
 def build_command() -> None:
     idx = InvertedIndex()
@@ -176,35 +169,24 @@ def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
     idx.load()
     results = []
 
-    stemmer = PorterStemmer()
-    query_tokens = tokenize_text(query, stemmer)
+    query_tokens = tokenize_text(query)
 
     doc_ids = set()
     for token in query_tokens:
-        doc_ids.update(idx.get_document_ids(token))
+        doc_ids.update(idx.index[token])
 
-    for id in doc_ids:
-        results.append(idx.docmap[id])
+    for doc in doc_ids:
+        results.append(idx.docmap[doc])
         if len(results) >= limit:
             break
 
     return results
 
 
-def tokenize_text(text: str, stemmer: PorterStemmer | None = None) -> list[str]:
-    if not stemmer:
-        stemmer = PorterStemmer()
-
+def tokenize_text(text: str) -> list[str]:
     text = preprocess_text(text)
     tokens = text.split()
-    valid_tokens = []
-
-    for token in tokens:
-        if token not in _stop_words:
-            stemmed = stemmer.stem(token)
-            valid_tokens.append(stemmed)
-
-    return valid_tokens
+    return [_stemmer.stem(t) for t in tokens if t not in _stop_words]
 
 
 def preprocess_text(text: str) -> str:
