@@ -1,13 +1,12 @@
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-DATA_PATH = os.path.join(PROJECT_ROOT, "data", "movies.json")
-STOP_WORDS_PATH = os.path.join(PROJECT_ROOT, "data", "stopwords.txt")
+DATA_PATH = PROJECT_ROOT / "data" / "movies.json"
+STOP_WORDS_PATH = PROJECT_ROOT / "data" / "stopwords.txt"
 
-CACHE_DIR = os.path.join(PROJECT_ROOT, "cache")
+CACHE_DIR = PROJECT_ROOT / "cache"
 
 DEFAULT_SEARCH_LIMIT = 5
 
