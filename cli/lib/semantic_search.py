@@ -9,8 +9,8 @@ from .utils import CACHE_DIR, load_movies
 class SemanticSearch:
     def __init__(self):
         self.model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-        self.embeddings = None
-        self.documents = None
+        self.embeddings: np.ndarray | None = None
+        self.documents: list[dict] | None = None
         self.document_map = {}
         self.movie_embeddings_path = Path(CACHE_DIR) / "movie_embeddings.npy"
 
@@ -42,6 +42,37 @@ class SemanticSearch:
 
         return self.build_embedding(documents)
 
+    def search(self, query: str, limit: int):
+        if limit < 1:
+            raise ValueError("limit must be a positive integer")
+        
+        if self.embeddings is None or len(self.embeddings) < 1:
+            raise ValueError(
+                "No embeddings loaded. Call `load_or_create_embeddings` first."
+            )
+
+        if self.documents is None or len(self.documents) < 1:
+            raise ValueError(
+                "No documents loaded. Call `load_or_create_embeddings` first."
+            )
+
+        query_embedding = self.generate_embedding(query)
+
+        similarity_scores = []
+        for index, embedding in enumerate(self.embeddings):
+            score = cosine_similarity(query_embedding, embedding)
+            similarity_scores.append((score, self.documents[index]))
+
+        sorted_scores = sorted(similarity_scores, key=lambda x: x[0], reverse=True)
+        return [
+            {
+                "score": score,
+                "title": document["title"],
+                "description": document["description"],
+            }
+            for score, document in sorted_scores[:limit]
+        ]
+
 
 def verify_model():
     semantic_search = SemanticSearch()
@@ -68,8 +99,27 @@ def embed_text(text: str):
 
 
 def embed_query_text(query: str):
+    embed_text(query)
+
+
+def cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+
+    return dot_product / (norm1 * norm2)
+
+
+def search(query: str, limit: int) -> None:
     semantic_search = SemanticSearch()
-    embedding = semantic_search.generate_embedding(query)
-    print(f"Query: {query}")
-    print(f"First 3 dimensions: {embedding[:3]}")
-    print(f"Shape: {embedding.shape}")
+    movies = load_movies()
+    semantic_search.load_or_create_embeddings(movies)
+    results = semantic_search.search(query, limit)
+
+    for index, result in enumerate(results):
+        print(
+            f"{index}. {result['title']} (score: {result['score']}) \n{result['description']}"
+        )
