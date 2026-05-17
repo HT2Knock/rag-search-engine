@@ -45,7 +45,7 @@ class SemanticSearch:
     def search(self, query: str, limit: int):
         if limit < 1:
             raise ValueError("limit must be a positive integer")
-        
+
         if self.embeddings is None or len(self.embeddings) < 1:
             raise ValueError(
                 "No embeddings loaded. Call `load_or_create_embeddings` first."
@@ -123,3 +123,28 @@ def search(query: str, limit: int) -> None:
         print(
             f"{index}. {result['title']} (score: {result['score']}) \n{result['description']}"
         )
+
+
+def chunk(text: str, size: int, overlap: int):
+    if size <= 0:
+        raise ValueError("Chunk size must be greater than 0")
+
+    if overlap >= size:
+        raise ValueError("Overlap must be smaller than chunk size")
+
+    words = text.split()
+    if not words:
+        return
+
+    print(f"Chunking {len(text)} characters")
+
+    index = 0
+    count = 1
+    step = size - overlap
+    while index <= len(words):
+        print(f"{count}. {' '.join(words[index : index + size])}")
+        index += step
+        count += 1
+
+        if index >= len(words):
+            break
