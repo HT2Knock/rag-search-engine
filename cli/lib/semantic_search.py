@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import numpy as np
@@ -146,5 +147,30 @@ def chunk(text: str, size: int, overlap: int):
         index += step
         count += 1
 
-        if index >= len(words):
+        if index + overlap >= len(words):
+            break
+
+
+def semantic_chunk(text: str, max_size: int, overlap: int):
+    if max_size <= 0:
+        raise ValueError("Chunk size must be greater than 0")
+
+    if overlap >= max_size:
+        raise ValueError("Overlap must be smaller than chunk size")
+
+    words = re.split(r"(?<=[.!?])\s+", text)
+    if not words:
+        return
+
+    print(f"Semantically chunking {len(text)} characters")
+
+    index = 0
+    count = 1
+    step = max_size - overlap
+    while index <= len(words):
+        print(f"{count}. {' '.join(words[index : index + max_size])}")
+        index += step
+        count += 1
+
+        if index + overlap >= len(words):
             break
